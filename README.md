@@ -42,88 +42,212 @@ yarn build
 ```
 
 ---
+## Архитектурное разделение и принципы проектирования
+Проект разработан с учетом следующих ключевых принципов:
 
-### **Интерфейс `IUser`**  
-Представляет данные о пользователе, необходимые для оформления заказа.  
+- **Разделение на слои (Separation of Concerns)**:
 
-**Поля:**  
-- `payment: string` — способ оплаты, выбранный пользователем.  
-- `address: string` — адрес доставки.  
-- `email: string` — контактный email.  
-- `phone: string` — контактный номер телефона.  
-- `total: number | null` — общая сумма заказа (может быть `null`, если сумма еще не рассчитана).  
+	- **Слой данных (Data Layer)**: включает интерфейсы и модели данных (например, `IProduct`, `ICustomerData`, `IOrder`), которые описывают структуру информации, поступающей от API и используемой в приложении.
+	- **Слой отображения (Presentation Layer)**: содержит компоненты пользовательского интерфейса, отвечающие за визуализацию данных (например, `ProductCard`, `Header`, `AddToCartButton`).
+	- **Слой навигации (Navigation Layer)**: управляет переходами между страницами и модальными окнами (например, логика перехода от `ProductCatalog` к `ProductDetailModal`).
 
----
+- **Принцип единственной ответственности (Single Responsibility Principle)**:
+	- Каждый класс или модуль выполняет только одну задачу. Например, компонент `ProductCard` отвечает исключительно за отображение информации о товаре, а модель `IProduct` описывает только данные товара.
 
-### **Интерфейс `IProduct`**  
-Описывает данные о товаре, который представлен в магазине.  
+- **Слабое связывание (Loose Coupling)**:
+	- Взаимодействие между компонентами осуществляется через передачу данных (например, через параметры или события), а не через жесткую зависимость внутри классов. Это позволяет изменять и тестировать отдельные части системы независимо друг от друга.
 
-**Поля:**  
-- `id: string` — уникальный идентификатор товара.  
-- `title: string` — название товара.  
-- `category: string` — категория, к которой относится товар.  
-- `description: string` — краткое описание товара.  
-- `image: string` — ссылка на изображение товара.  
-- `price: number | null` — цена товара (может быть `null`, если цена не указана).  
-- `button?: string` — текст кнопки для взаимодействия с товаром (например, "Добавить в корзину").  
-- `index?: number` — порядковый номер товара в списке (необязательное поле).  
+## Типизация и модели данных
+Все типы данных собраны в файле `src/types/index.ts`, что обеспечивает централизованное управление интерфейсами и типами. Типы разделены по функциональным группам:
 
----
+#### Модели API: описывают данные, получаемые от сервера, например:
 
-### **Интерфейс `IOrderForm`**  
-Определяет структуру данных формы оформления заказа.  
+```typescript
+export interface IApiProduct {
+  productId: string;
+  productDescription: string;
+  productImage: string;
+  productTitle: string;
+  productCategory: string;
+  productPrice: number | null;
+}
 
-**Поля:**  
-- `email: string` — email пользователя, указанный при оформлении заказа.  
-- `phone: string` — контактный номер телефона.  
-- `address: string` — адрес доставки заказа.  
+export interface IApiProductList {
+  totalCount: number;
+  productItems: IApiProduct[];
+}
+```
 
----
+#### UI модели: описывают данные, используемые в интерфейсе:
 
-### **Интерфейс `IProductData`**  
-Определяет структуру списка товаров, полученных из API или используемых в приложении.  
+```typescript
+export interface IProduct {
+  productId: string;
+  productDescription: string;
+  productImage: string;
+  productTitle: string;
+  productCategory: string;
+  productPrice: number | null;
+}
 
-**Поля:**  
-- `items: IProduct[]` — массив объектов товаров.  
-- `total: number` — общее количество товаров в списке.  
+export interface ICustomerData {
+  paymentMethod: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerAddress?: string;
+}
 
----
+export interface IOrder {
+  orderedProducts: IProduct[];
+  customerInfo: ICustomerData;
+  orderTotal: number;
+}
+```
 
-### **Интерфейс `IOrderData`**  
-Описывает структуру данных заказа, содержащую список товаров и их общую стоимость.  
+#### Прочие типы: для описания пропсов компонентов, навигационных событий и т.д.
 
-**Поля:**  
-- `list: HTMLElement[]` — массив HTML-элементов, представляющих товары в корзине.  
-- `total: number` — общая сумма товаров в заказе.  
+## API эндпоинты
+#### 1. Список товаров
+* Метод: GET
+* Эндпоинт: `{{baseUrl}}/product/`
+* Пример успешного ответа (200 OK):
 
----
+```json
+{
+  "totalCount": 10,
+  "productItems": [
+    {
+      "productId": "854cef69-976d-4c2a-a18c-2aa45046c390",
+      "productDescription": "If you plan to solve tasks on the simulator, buy two.",
+      "productImage": "/5_Dots.svg",
+      "productTitle": "+1 hour in a day",
+      "productCategory": "soft-skills",
+      "productPrice": 750
+    },
+    ...
+  ]
+}
+```
 
-### **Интерфейс `IOrderResponse`**  
-Расширяет `IUser` и представляет структуру данных, отправляемую в ответе сервера после оформления заказа.  
+#### 2. Товар
+* Метод: GET
+* Эндпоинт: `{{baseUrl}}/product/{productId}`
+* Пример успешного ответа (200 OK):
 
-**Поля:**  
-- `items: string[]` — массив идентификаторов товаров, включенных в заказ.  
-- **Наследует все поля из `IUser`**, включая данные о пользователе и сумму заказа.  
+```json
+{
+  "productId": "854cef69-976d-4c2a-a18c-2aa45046c390",
+  "productDescription": "If you plan to solve tasks on the simulator, buy two.",
+  "productImage": "/5_Dots.svg",
+  "productTitle": "+1 hour in a day",
+  "productCategory": "soft-skills",
+  "productPrice": 750
+}
+```
 
----
+Ответ при ошибке (404 Not Found):
 
-### **Интерфейс `IAppState`**  
-Описывает состояние приложения и методы для работы с данными.  
+```json
+{
+  "error": "NotFound"
+}
+```
 
-**Поля:**  
-- `productStore: IProduct[]` — список всех товаров в магазине.  
+#### 3. Заказ
+* Метод: POST
+* Эндпоинт: `{{baseUrl}}/order`
+* Пример тела запроса:
 
-**Методы:**  
-- `getItems(): void` — метод для получения списка товаров из API.  
-- `getTotalBasket(): number` — возвращает общее количество товаров в корзине.  
-- `getTotalBasketPrice(): number` — рассчитывает общую стоимость всех товаров в корзине.  
-- `setOrderField(field: keyof IUser, value: string): void` — обновляет конкретное поле заказа (например, email или адрес).  
-- `validateContact(): boolean` — проверяет корректность введенных контактных данных.  
-- `validateOrder(): boolean` — проверяет корректность заполненных данных заказа перед оформлением.  
-- `hasProductInBasket(product: IProduct): boolean` — проверяет, есть ли конкретный товар в корзине.  
-- `clearOrder(): boolean` — очищает данные заказа.  
-- `clearBasket(): void` — полностью очищает корзину.  
-- `deleteBasket(): void` — удаляет конкретный товар из корзины.  
-- `addBasket(value: IProduct): void` — добавляет товар в корзину.  
+```json
+{
+  "paymentMethod": "online",
+  "customerEmail": "test@test.com",
+  "customerPhone": "+71234567890",
+  "customerAddress": "Spb Vosstania 1",
+  "orderTotal": 2200,
+  "productIds": [
+    "854cef69-976d-4c2a-a18c-2aa45046c390",
+    "c101ab44-ed99-4a54-990d-47aa2bb4e7d9"
+  ]
+}
+```
 
----
+Пример успешного ответа (200 OK):
+
+```json
+{
+  "orderId": "28c57cb4-3002-4445-8aa1-2a06a5055ae5",
+  "confirmedTotal": 2200
+}
+```
+
+Ошибки (400 Bad Request):
+
+- Товар не найден:
+
+```json
+{
+  "error": "Product with id c101ab44-ed99-4a54-990d-47aa2bb4e7d not found"
+}
+```
+
+- Неверная сумма заказа:
+
+```json
+{
+  "error": "Incorrect order total"
+}
+```
+
+- Не указан адрес:
+
+```json
+{
+  "error": "Address not provided"
+}
+```
+
+## Компоненты и страницы
+
+#### ProductCard
+Отображает информацию о товаре (название, цена, категория и т.д.) и включает кнопку "Добавить в корзину".
+
+#### AddToCartButton
+Добавляет товар в корзину. Используется в: `ProductDetailModal`.
+
+#### Header
+Верхняя панель с логотипом и кнопкой корзины. Присутствует на главной странице и в каталоге товаров.
+
+#### PaymentOptions
+Позволяет выбрать способ оплаты (например, "online", "cash"). Используется в: `PaymentAddressModal`.
+
+#### Form
+Переиспользуемая форма для ввода/редактирования данных покупателя (телефон, email, адрес). Используется в: `ContactsModal`.
+
+#### ProductCollection
+Коллекция карточек товаров, отображаемая на странице каталога товаров.
+
+#### CartCollection
+Отображает список товаров, добавленных в корзину, и используется в `CartModal`.
+
+## Страницы и модальные окна
+#### HomePage:
+Главная страница с каталогом товаров и шапкой.
+
+#### ProductCatalog:
+Страница со списком всех доступных товаров. При клике на товар открывается `ProductDetailModal`.
+
+#### ProductDetailModal:
+Отображает подробную информацию о товаре с кнопкой "Добавить в корзину".
+
+#### CartModal:
+Отображает текущую корзину и содержит кнопку для перехода к оформлению заказа, открывая `PaymentAddressModal`.
+
+#### PaymentAddressModal:
+Позволяет выбрать способ оплаты и ввести адрес. При нажатии "Далее" открывается `ContactsModal`.
+
+#### ContactsModal:
+Форма для ввода телефона и email. При нажатии "Оплатить" открывается `OrderSuccessModal`.
+
+#### OrderSuccessModal:
+Подтверждает успешное оформление заказа. Кнопка "За новыми покупками" возвращает пользователя в каталог товаров.
